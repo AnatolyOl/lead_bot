@@ -1,5 +1,11 @@
 import logging
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
+from telegram import (
+    Update,
+    ReplyKeyboardMarkup,
+    KeyboardButton,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+)
 from telegram.ext import (
     ApplicationBuilder,
     ContextTypes,
@@ -7,6 +13,7 @@ from telegram.ext import (
     ConversationHandler,
     MessageHandler,
     filters,
+    CallbackQueryHandler,
 )
 from dotenv import load_dotenv
 import os
@@ -19,14 +26,17 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 
-FIRST_MESSAGE, GET_NAME, GET_NUMBER, GET_CONSENT, GET_LEAD = range(5)
+FIRST_MESSAGE, GET_NAME, GET_NUMBER, GET_CONSENT, GET_LEAD, INLINE_BUTTON = range(6)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if query:
+        await query.answer()
     keyboard = [["Да", "Нет"], ["Еще не знаю"]]
     markup = ReplyKeyboardMarkup(
         keyboard,
-        resize_keyboard=True,
+        resize_keyboard=False,
         one_time_keyboard=True,
         input_field_placeholder="Выберите вариант ответа",
     )
@@ -56,10 +66,14 @@ async def get_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return GET_NAME
     else:
+        keyboard = [[InlineKeyboardButton("Да", callback_data="yes")]]
+        markup = InlineKeyboardMarkup(keyboard)
         await context.bot.send_message(
-            chat_id=update.effective_user.id, text="Хотите получить гайд?"
+            chat_id=update.effective_user.id,
+            text="Окей, тогда всё!",
+            reply_markup=markup,
         )
-        return FIRST_MESSAGE
+        return INLINE_BUTTON
 
 
 async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -81,13 +95,28 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def get_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    number = update.effective_message.text
+    number = update.effective_message.contact.phone_number
     context.user_data["number"] = number
+    print(context.user_data)
     await context.bot.send_message(
         chat_id=update.effective_user.id,
         text="Согласны ли вы на обработку ваших данных?",
     )
     return GET_CONSENT
+
+
+async def get_inline_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if query.data == "yes":
+        keyboard = [
+            [
+                InlineKeyboardButton("Да", callback_data="yes"),
+                InlineKeyboardButton("Нет", callback_data="no"),
+            ]
+        ]
+        markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text="Спасибо за ответ!", reply_markup=markup)
 
 
 async def get_consent(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -134,8 +163,12 @@ if __name__ == "__main__":
             ],
             GET_NUMBER: [
                 MessageHandler(
-                    filters=filters.CONTACT & ~filters.COMMAND, 
-                    callback=get_number),
+                    filters=filters.CONTACT & ~filters.COMMAND, callback=get_number
+                ),
+            ],
+            INLINE_BUTTON: [
+                CallbackQueryHandler(callback=get_inline_button, pattern="yes"),
+                CallbackQueryHandler(callback=start, pattern="no"),
             ],
             GET_CONSENT: [
                 MessageHandler(
