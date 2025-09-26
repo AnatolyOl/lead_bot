@@ -110,6 +110,7 @@ async def get_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text="Согласны ли вы на обработку ваших данных?",
         reply_markup=markup,
     )
+    
     return GET_CONSENT
 
 
