@@ -17,6 +17,7 @@ from telegram.ext import (
 )
 from dotenv import load_dotenv
 import os
+from config.config import ADMIN_ID
 
 # Подгружаем переменные из .env
 load_dotenv()
@@ -55,7 +56,7 @@ async def get_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard,
         resize_keyboard=True,
         one_time_keyboard=True,
-        input_field_placeholder="Выберите свое имя или напишите",
+        input_field_placeholder="Выберите имя или напишите",
     )
     context.user_data["answer"] = answer
     if answer == "Да":
@@ -72,6 +73,10 @@ async def get_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=update.effective_user.id,
             text="Окей, тогда всё!",
             reply_markup=markup,
+        )
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"[{update.effective_user.first_name}](tg://user?id={update.effective_user.id}), отказался от гайда",
         )
         return INLINE_BUTTON
 
@@ -98,9 +103,12 @@ async def get_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
     number = update.effective_message.contact.phone_number
     context.user_data["number"] = number
     print(context.user_data)
+    keyboard = [["Да", "Нет"]]
+    markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
     await context.bot.send_message(
         chat_id=update.effective_user.id,
         text="Согласны ли вы на обработку ваших данных?",
+        reply_markup=markup,
     )
     return GET_CONSENT
 
@@ -120,17 +128,25 @@ async def get_inline_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def get_consent(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [["Да", "Нет"]]
+    markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     consent = update.effective_message.text.strip().lower()
     context.user_data["consent"] = consent
 
     if consent == "да":
         await context.bot.send_message(
-            chat_id=update.effective_user.id, text="Вот ваш гайд"
+            chat_id=update.effective_user.id, text="Вот ваш гайд", reply_markup=markup
+        )
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"Новая заявка:\nИмя:{context.user_data['name']}\nТелефон:{context.user_data['number']}",
         )
         return GET_LEAD
     else:
         await context.bot.send_message(
-            chat_id=update.effective_user.id, text="Хотите получить гайд?"
+            chat_id=update.effective_user.id,
+            text="Хотите получить гайд?",
+            reply_markup=markup,
         )
         return FIRST_MESSAGE
 
